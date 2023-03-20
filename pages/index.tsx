@@ -241,6 +241,7 @@ export default function Home() {
           rel="icon"
           href="/favicon.ico"
         />
+        <script async defer src="https://analytics.umami.is/script.js" data-website-id="c72b3570-4575-4254-a330-c89fa1981170"></script>
       </Head>
 
       {selectedConversation && (
