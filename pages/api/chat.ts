@@ -33,7 +33,7 @@ const handler = async (req: Request): Promise<Response> => {
     console.error(error);
     return new Response(
       error +
-        `. Set OpenAI API Key: click menu (top left) > OpenAI API Key > Done.`
+        `. Set [OpenAI API Key](https://platform.openai.com/account/api-keys): click menu (top left) > OpenAI API Key > Done.`
     );
   }
 };
