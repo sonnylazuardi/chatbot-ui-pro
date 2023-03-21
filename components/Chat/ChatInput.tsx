@@ -1,13 +1,14 @@
-import { Message } from "@/types";
+import { Message, OpenAIModel, OpenAIModelID } from "@/types";
 import { IconSend } from "@tabler/icons-react";
 import { FC, KeyboardEvent, useEffect, useRef, useState } from "react";
 
 interface Props {
   messageIsStreaming: boolean;
   onSend: (message: Message) => void;
+  model: OpenAIModel;
 }
 
-export const ChatInput: FC<Props> = ({ onSend, messageIsStreaming }) => {
+export const ChatInput: FC<Props> = ({ onSend, messageIsStreaming, model }) => {
   const [content, setContent] = useState<string>();
   const [isTyping, setIsTyping] = useState<boolean>(false);
 
@@ -15,8 +16,10 @@ export const ChatInput: FC<Props> = ({ onSend, messageIsStreaming }) => {
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
-    if (value.length > 4000) {
-      alert("Message limit is 4000 characters");
+    const maxLength = model.id === OpenAIModelID.GPT_3_5 ? 12000 : 24000;
+
+    if (value.length > maxLength) {
+      alert(`Message limit is ${maxLength} characters`);
       return;
     }
 
@@ -67,7 +70,7 @@ export const ChatInput: FC<Props> = ({ onSend, messageIsStreaming }) => {
     <div className="fixed sm:absolute bottom-4 sm:bottom-8 w-full sm:w-1/2 px-2 left-0 sm:left-[280px] lg:left-[200px] right-0 ml-auto mr-auto">
       <textarea
         ref={textareaRef}
-        className="rounded-lg pl-4 pr-8 py-3 w-full focus:outline-none max-h-[280px] dark:bg-[#40414F] dark:border-opacity-50 dark:border-neutral-800 dark:text-neutral-100 border border-neutral-300 shadow text-neutral-900"
+        className="rounded-lg pl-4 pr-8 py-3 w-full focus:outline-none dark:bg-[#40414F] dark:border-opacity-50 dark:border-neutral-800 dark:text-neutral-100 border border-neutral-300 shadow text-neutral-900"
         style={{
           resize: "none",
           bottom: `${textareaRef?.current?.scrollHeight}px`,
