@@ -1,7 +1,8 @@
 import { Chat } from "@/components/Chat/Chat";
 import { Navbar } from "@/components/Mobile/Navbar";
 import { Sidebar } from "@/components/Sidebar/Sidebar";
-import { Conversation, Message, OpenAIModel } from "@/types";
+import { Conversation, Message, OpenAIModel, OpenAIModelID, OpenAIModels } from "@/types";
+import { cleanConversationHistory, cleanSelectedConversation } from "@/utils/app";
 import { IconArrowBarLeft, IconArrowBarRight } from "@tabler/icons-react";
 import Head from "next/head";
 import { useEffect, useState } from "react";
@@ -10,22 +11,37 @@ export default function Home() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<Conversation>();
   const [loading, setLoading] = useState<boolean>(false);
-  const [model, setModel] = useState<OpenAIModel>(OpenAIModel.GPT_3_5);
+  const [models, setModels] = useState<OpenAIModel[]>([]);
   const [lightMode, setLightMode] = useState<"dark" | "light">("dark");
   const [messageIsStreaming, setMessageIsStreaming] = useState<boolean>(false);
   const [showSidebar, setShowSidebar] = useState<boolean>(true);
   const [apiKey, setApiKey] = useState<string>("");
+  const [messageError, setMessageError] = useState<boolean>(false);
+  const [modelError, setModelError] = useState<boolean>(false);
 
-  const handleSend = async (message: Message) => {
+  const handleSend = async (message: Message, isResend: boolean) => {
     if (selectedConversation) {
-      let updatedConversation: Conversation = {
-        ...selectedConversation,
-        messages: [...selectedConversation.messages, message]
-      };
+      let updatedConversation: Conversation;
+
+      if (isResend) {
+        const updatedMessages = [...selectedConversation.messages];
+        updatedMessages.pop();
+
+        updatedConversation = {
+          ...selectedConversation,
+          messages: [...updatedMessages, message]
+        };
+      } else {
+        updatedConversation = {
+          ...selectedConversation,
+          messages: [...selectedConversation.messages, message]
+        };
+      }
 
       setSelectedConversation(updatedConversation);
       setLoading(true);
       setMessageIsStreaming(true);
+      setMessageError(false);
 
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -33,7 +49,7 @@ export default function Home() {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model,
+          model: updatedConversation.model,
           messages: updatedConversation.messages,
           key: apiKey
         })
@@ -41,12 +57,18 @@ export default function Home() {
 
       if (!response.ok) {
         setLoading(false);
+        setMessageIsStreaming(false);
+        setMessageError(true);
         return;
       }
 
       const data = response.body;
 
       if (!data) {
+        setLoading(false);
+        setMessageIsStreaming(false);
+        setMessageError(true);
+
         return;
       }
 
@@ -144,13 +166,35 @@ export default function Home() {
     localStorage.setItem("selectedConversation", JSON.stringify(updatedConversation));
   };
 
+  const handleChangeModel = (conversation: Conversation, model: OpenAIModel) => {
+    const updatedConversation = {
+      ...conversation,
+      model
+    };
+
+    const updatedConversations = conversations.map((c) => {
+      if (c.id === updatedConversation.id) {
+        return updatedConversation;
+      }
+
+      return c;
+    });
+
+    setConversations(updatedConversations);
+    localStorage.setItem("conversationHistory", JSON.stringify(updatedConversations));
+
+    setSelectedConversation(updatedConversation);
+    localStorage.setItem("selectedConversation", JSON.stringify(updatedConversation));
+  };
+
   const handleNewConversation = () => {
     const lastConversation = conversations[conversations.length - 1];
 
     const newConversation: Conversation = {
       id: lastConversation ? lastConversation.id + 1 : 1,
       name: `Conversation ${lastConversation ? lastConversation.id + 1 : 1}`,
-      messages: []
+      messages: [],
+      model: OpenAIModels[OpenAIModelID.GPT_3_5]
     };
 
     const updatedConversations = [...conversations, newConversation];
@@ -160,7 +204,6 @@ export default function Home() {
     setSelectedConversation(newConversation);
     localStorage.setItem("selectedConversation", JSON.stringify(newConversation));
 
-    setModel(OpenAIModel.GPT_3_5);
     setLoading(false);
   };
 
@@ -181,7 +224,8 @@ export default function Home() {
       setSelectedConversation({
         id: 1,
         name: "New conversation",
-        messages: []
+        messages: [],
+        model: OpenAIModels[OpenAIModelID.GPT_3_5]
       });
       localStorage.removeItem("selectedConversation");
     }
@@ -192,13 +236,39 @@ export default function Home() {
     localStorage.setItem("apiKey", apiKey);
   };
 
+  const fetchModels = async (key: string) => {
+    const response = await fetch("/api/models", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        key
+      })
+    });
+
+    if (!response.ok) {
+      setModelError(true);
+      return;
+    }
+
+    const data = await response.json();
+
+    if (!data) {
+      setModelError(true);
+      return;
+    }
+
+    setModels(data);
+  };
+
   useEffect(() => {
     const theme = localStorage.getItem("theme");
     if (theme) {
       setLightMode(theme as "dark" | "light");
     }
 
-    const apiKey = localStorage.getItem("apiKey");
+    const apiKey = localStorage.getItem("apiKey") || "";
     if (apiKey) {
       setApiKey(apiKey);
     }
@@ -208,21 +278,27 @@ export default function Home() {
     }
 
     const conversationHistory = localStorage.getItem("conversationHistory");
-
     if (conversationHistory) {
-      setConversations(JSON.parse(conversationHistory));
+      const parsedConversationHistory: Conversation[] = JSON.parse(conversationHistory);
+      const cleanedConversationHistory = cleanConversationHistory(parsedConversationHistory);
+      setConversations(cleanedConversationHistory);
     }
 
     const selectedConversation = localStorage.getItem("selectedConversation");
     if (selectedConversation) {
-      setSelectedConversation(JSON.parse(selectedConversation));
+      const parsedSelectedConversation: Conversation = JSON.parse(selectedConversation);
+      const cleanedSelectedConversation = cleanSelectedConversation(parsedSelectedConversation);
+      setSelectedConversation(cleanedSelectedConversation);
     } else {
       setSelectedConversation({
         id: 1,
         name: "New conversation",
-        messages: []
+        messages: [],
+        model: OpenAIModels[OpenAIModelID.GPT_3_5]
       });
     }
+
+    fetchModels(apiKey);
   }, []);
 
   return (
@@ -243,7 +319,6 @@ export default function Home() {
         />
         <script async defer src="https://analytics.umami.is/script.js" data-website-id="c72b3570-4575-4254-a330-c89fa1981170"></script>
       </Head>
-
       {selectedConversation && (
         <div className={`flex flex-col h-screen w-screen text-white ${lightMode}`}>
           <div className="sm:hidden w-full fixed top-0">
@@ -284,13 +359,15 @@ export default function Home() {
             )}
 
             <Chat
+              conversation={selectedConversation}
               messageIsStreaming={messageIsStreaming}
-              model={model}
-              messages={selectedConversation.messages}
+              modelError={modelError}
+              messageError={messageError}
+              models={models}
               loading={loading}
               lightMode={lightMode}
               onSend={handleSend}
-              onSelect={setModel}
+              onModelChange={handleChangeModel}
             />
           </div>
         </div>
