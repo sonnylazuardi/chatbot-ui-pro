@@ -5,6 +5,7 @@ import { ChatBody, Conversation, KeyValuePair, Message, OpenAIModel, OpenAIModel
 import { cleanConversationHistory, cleanSelectedConversation } from "@/utils/app/clean";
 import { DEFAULT_SYSTEM_PROMPT } from "@/utils/app/const";
 import { saveConversation, saveConversations, updateConversation } from "@/utils/app/conversation";
+import { exportConversations, importConversations } from "@/utils/app/data";
 import { IconArrowBarLeft, IconArrowBarRight } from "@tabler/icons-react";
 import Head from "next/head";
 import { useEffect, useState } from "react";
@@ -181,6 +182,16 @@ export default function Home() {
     localStorage.setItem("apiKey", apiKey);
   };
 
+  const handleExportConversations = () => {
+    exportConversations();
+  };
+
+  const handleImportConversations = (conversations: Conversation[]) => {
+    importConversations(conversations);
+    setConversations(conversations);
+    setSelectedConversation(conversations[conversations.length - 1]);
+  };
+
   const handleSelectConversation = (conversation: Conversation) => {
     setSelectedConversation(conversation);
     saveConversation(conversation);
@@ -239,6 +250,26 @@ export default function Home() {
     setSelectedConversation(single);
     setConversations(all);
   };
+
+  const handleClearConversations = () => {
+    setConversations([]);
+    localStorage.removeItem("conversationHistory");
+
+    setSelectedConversation({
+      id: 1,
+      name: "New conversation",
+      messages: [],
+      model: OpenAIModels[OpenAIModelID.GPT_3_5],
+      prompt: DEFAULT_SYSTEM_PROMPT
+    });
+    localStorage.removeItem("selectedConversation");
+  };
+
+  useEffect(() => {
+    if (window.innerWidth < 640) {
+      setShowSidebar(false);
+    }
+  }, [selectedConversation]);
 
   useEffect(() => {
     const theme = localStorage.getItem("theme");
@@ -299,7 +330,7 @@ export default function Home() {
         <script async defer src="https://analytics.umami.is/script.js" data-website-id="c72b3570-4575-4254-a330-c89fa1981170"></script>
       </Head>
       {selectedConversation && (
-        <div className={`flex flex-col h-screen w-screen text-white ${lightMode}`}>
+        <div className={`flex flex-col h-screen w-screen text-white dark:text-white text-sm ${lightMode}`}>
           <div className="sm:hidden w-full fixed top-0">
             <Navbar
               selectedConversation={selectedConversation}
@@ -323,6 +354,9 @@ export default function Home() {
                   onToggleSidebar={() => setShowSidebar(!showSidebar)}
                   onUpdateConversation={handleUpdateConversation}
                   onApiKeyChange={handleApiKeyChange}
+                  onClearConversations={handleClearConversations}
+                  onExportConversations={handleExportConversations}
+                  onImportConversations={handleImportConversations}
                 />
 
                 <IconArrowBarLeft
@@ -332,7 +366,7 @@ export default function Home() {
               </>
             ) : (
               <IconArrowBarRight
-                className="fixed top-2.5 left-4 sm:top-1.5 sm:left-4 sm:text-neutral-700 dark:text-white cursor-pointer hover:text-gray-400 dark:hover:text-gray-300 h-7 w-7 sm:h-8 sm:w-8"
+                className="fixed text-white z-50 top-2.5 left-4 sm:top-1.5 sm:left-4 sm:text-neutral-700 dark:text-white cursor-pointer hover:text-gray-400 dark:hover:text-gray-300 h-7 w-7 sm:h-8 sm:w-8"
                 onClick={() => setShowSidebar(!showSidebar)}
               />
             )}
